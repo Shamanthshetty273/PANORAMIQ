@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Images</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Upload Images</h1>
+    <form id="uploadForm" method="post" enctype="multipart/form-data" style="display: none;">
+        <input type="hidden" name="num_images" id="num_images" value="{{ num_images }}">
+        <div id="imageInputs"></div>
+        <button type="button" id="saveButton" onclick="saveUploadedImages()" disabled>Save Uploaded Images</button>
+    </form>
+
+    <form id="cameraForm" action="{{ url_for('complete_upload') }}" method="post">
+        <input type="hidden" name="num_images" id="num_images" value="{{ num_images }}">
+        <button type="button" onclick="startCapture()">Capture from Camera</button>
+        <button type="button" onclick="showUploadSection()">Upload from PC</button>
+        <button type="submit">Complete Upload and Stitch</button>
+    </form>
+
+    <div id="camera" style="display: none;">
+        <video id="video" width="640" height="480" autoplay></video>
+        <button id="snap">Capture</button>
+        <canvas id="canvas" width="640" height="480"></canvas>
+    </div>
+
+    <p id="captureStatus"></p>
+    <p id="saveStatus"></p> <!-- Added this line -->
+
+    <script>
+        let captureCount = 0; // Track the number of images captured
+        const numImages = parseInt(document.getElementById('num_images').value);
+        document.getElementById('captureStatus').textContent = `Images left to capture: ${numImages}`;
+    
+        function generateInputs() {
+            const count = numImages;
+            const container = document.getElementById('imageInputs');
+            container.innerHTML = '';
+            for (let i = 1; i <= count; i++) {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.name = 'image' + i;
+                input.required = true;
+                input.addEventListener('change', checkAllInputsFilled);
+                container.appendChild(input);
+            }
+        }
+    
+        function startCapture() {
+            clearUploads(() => {
+                const video = document.getElementById('video');
+                const canvas = document.getElementById('canvas');
+                const snap = document.getElementById('snap');
+                const camera = document.getElementById('camera');
+                const captureStatus = document.getElementById('captureStatus');
+                const imageInputs = document.getElementById('imageInputs');
+    
+                // Hide the upload section if capturing from camera
+                imageInputs.style.display = 'none';
+    
+                camera.style.display = 'block';
+    
+                navigator.mediaDevices.getUserMedia({ video: true })
+                    .then(stream => {
+                        video.srcObject = stream;
+                        video.play();
+                    })
+                    .catch(err => {
+                        console.error('Error accessing camera: ', err);
+                    });
+    
+                // Apply mirror effect
+                const videoElement = document.getElementById('video');
+                videoElement.style.transform = 'scaleX(-1)';
+    
+                snap.addEventListener('click', () => {
+                    if (captureCount < numImages) {
+                        const context = canvas.getContext('2d');
+                        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        canvas.toBlob(blob => {
+                            const formData = new FormData();
+                            formData.append('image', blob, `captured_image_${captureCount + 1}.jpg`);
+                            fetch('/upload-camera-image', {
+                                method: 'POST',
+                                body: formData
+                            })
+                            .then(response => response.text())
+                            .then(text => {
+                                console.log(text); // For debugging
+                                captureCount++;
+                                document.getElementById('captureStatus').textContent = `Images left to capture: ${numImages - captureCount}`;
+                            })
+                            .catch(err => console.error('Error uploading image: ', err));
+                        });
+                    } else {
+                        alert('All images have been captured.');
+                    }
+                });
+            });
+        }
+    
+
+        function showUploadSection() {
+            clearUploads(() => {
+                const cameraSection = document.getElementById('camera');
+                const imageInputs = document.getElementById('imageInputs');
+                const uploadForm = document.getElementById('uploadForm');
+
+                // Hide camera section if uploading manually
+                cameraSection.style.display = 'none';
+                imageInputs.style.display = 'block';
+                uploadForm.style.display = 'block';
+
+                generateInputs();
+            });
+        }
+
+        function checkAllInputsFilled() {
+            const inputs = document.querySelectorAll('#imageInputs input[type="file"]');
+            let allFilled = true;
+            inputs.forEach(input => {
+                if (!input.files.length) {
+                    allFilled = false;
+                }
+            });
+
+            document.getElementById('saveButton').disabled = !allFilled;
+        }
+
+        function saveUploadedImages() {
+            const uploadForm = document.getElementById('uploadForm');
+            const formData = new FormData(uploadForm);
+            fetch('/save-uploaded-images', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                const saveStatus = document.getElementById('saveStatus');
+                saveStatus.textContent = data.message;
+                saveStatus.style.display = 'block';
+            })
+            .catch(err => console.error('Error saving images: ', err));
+        }
+
+        function clearUploads(callback) {
+            fetch('/clear-uploads', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log(data.message); // For debugging
+                callback();
+            })
+            .catch(err => console.error('Error clearing uploads: ', err));
+        }
+    </script>
+</body>
+</html>

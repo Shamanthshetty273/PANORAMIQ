@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Stitching Tool</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Image Stitching Tool</h1>
+    <form action="{{ url_for('index') }}" method="post">
+        <label for="num_images">Number of Images:</label>
+        <input type="number" id="num_images" name="num_images" min="2" required>
+        <button type="submit">Set Image Count</button>
+    </form>
+</body>
+</html>
